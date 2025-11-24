@@ -1,21 +1,28 @@
 import cv2
+import dlib
 
-class FaceDetector:
-    def __init__(self, scaleFactor=1.3, minNeighbors=5):
-        self.detector = cv2.CascadeClassifier(
-            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-        )
-        self.scaleFactor = scaleFactor
-        self.minNeighbors = minNeighbors
+# Detector frontal de Dlib
+detector = dlib.get_frontal_face_detector()
 
-    def detect(self, gray_frame):
-        """
-        Recibe un frame en escala de grises y devuelve:
-        - lista de bounding boxes (x, y, w, h)
-        """
-        faces = self.detector.detectMultiScale(
-            gray_frame,
-            scaleFactor=self.scaleFactor,
-            minNeighbors=self.minNeighbors
-        )
-        return faces
+def detect_faces(frame):
+    """
+    Retorna lista de cajas (x, y, w, h) detectadas por Dlib.
+    """
+
+    # Convertir a gris si viene en BGR
+    if len(frame.shape) == 3:
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = frame
+
+    detections = detector(gray, 1)
+    boxes = []
+
+    for d in detections:
+        x = d.left()
+        y = d.top()
+        w = d.right() - d.left()
+        h = d.bottom() - d.top()
+        boxes.append((x, y, w, h))
+
+    return boxes
