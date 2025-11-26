@@ -1,5 +1,6 @@
 import cv2
 import pickle
+import sys, os
 from tkinter import Tk, messagebox
 from src.detection.face_detector import FaceDetector
 
@@ -8,11 +9,20 @@ OVERLAY_ALPHA = 0.6
 THRESHOLD = 70   # Menor = más estricto
 # ----------------------------
 
+# --- AGREGAR ESTA FUNCIÓN ----
+def resource_path(relative_path):
+    """Obtiene rutas reales tanto en desarrollo como dentro del .exe PyInstaller."""
+    if hasattr(sys, "_MEIPASS"):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+# ------------------------------
+
 
 class Recognizer:
-    def __init__(self):
-        self.model_path = "src/data/model.xml"
-        self.labels_path = "src/data/labels.pickle"
+    def _init_(self):
+        # RUTAS CAMBIADAS PARA FUNCIONAR EN EXE
+        self.model_path = resource_path("src/data/model.xml")
+        self.labels_path = resource_path("src/data/labels.pickle")
 
         # Tkinter oculto para mostrar mensajes cuando toque
         root = Tk()
@@ -35,6 +45,7 @@ class Recognizer:
             raise SystemExit
 
         self.detector = FaceDetector()
+
 
     def _draw_overlay_top(self, frame, text):
         h, w = frame.shape[:2]
@@ -136,5 +147,5 @@ class Recognizer:
         cv2.destroyAllWindows()
 
 
-if __name__ == "__main__":
+if _name_ == "_main_":
     Recognizer().start()
