@@ -6,25 +6,24 @@ from src.detection.face_detector import FaceDetector
 
 # ---------- Config ----------
 OVERLAY_ALPHA = 0.6
-THRESHOLD = 70   # Menor = más estricto
+# CAMBIO IMPORTANTE: LBPH devuelve "distancia" (0 es idéntico). 
+# 70 es muy estricto. 110 es un buen punto de partida.
+THRESHOLD = 65  
 # ----------------------------
 
-# --- AGREGAR ESTA FUNCIÓN ----
 def resource_path(relative_path):
     """Obtiene rutas reales tanto en desarrollo como dentro del .exe PyInstaller."""
     if hasattr(sys, "_MEIPASS"):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.abspath("."), relative_path)
-# ------------------------------
 
 
 class Recognizer:
     def __init__(self):
-        # RUTAS CAMBIADAS PARA FUNCIONAR EN EXE
         self.model_path = resource_path("src/data/model.xml")
         self.labels_path = resource_path("src/data/labels.pickle")
 
-        # Tkinter oculto para mostrar mensajes cuando toque
+        # Tkinter oculto para mostrar mensajes
         root = Tk()
         root.withdraw()
 
@@ -34,7 +33,7 @@ class Recognizer:
             self.recognizer.read(self.model_path)
         except Exception:
             messagebox.showerror("Error", "No se encontró el modelo.\nEntrena primero.")
-            raise SystemExit
+            sys.exit()
 
         # Cargar labels
         try:
@@ -42,7 +41,7 @@ class Recognizer:
                 self.label_dict = pickle.load(f)
         except Exception:
             messagebox.showerror("Error", "No se encontró labels.pickle.\nEntrena primero.")
-            raise SystemExit
+            sys.exit()
 
         self.detector = FaceDetector()
 
@@ -64,88 +63,80 @@ class Recognizer:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255), 2)
 
     def start(self):
-        cap = cv2.VideoCapture(0)
+        cap = cv2.VideoCapture(0, cv2.CAP_DSHOW) # CAP_DSHOW ayuda a iniciar rápido en Windows
         if not cap.isOpened():
             messagebox.showerror("Error", "No se pudo abrir la cámara.")
             return
 
-        # Aviso inicial
         messagebox.showinfo(
             "Reconocimiento iniciado",
-            "La cámara está activa.\nPresiona 'Q' en la ventana para salir."
+            "La cámara está activa.\nMira la consola para ver los valores de confianza.\nPresiona 'Q' para salir."
         )
 
         while True:
             ret, frame = cap.read()
-            if not ret:
-                break
+            if not ret: break
+
+            # Efecto espejo para que sea natural
+            frame = cv2.flip(frame, 1)
 
             frame_h, frame_w = frame.shape[:2]
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             faces = self.detector.detect(gray)
 
-            # Mensajes por defecto
             self._draw_overlay_top(frame, "Buscando rostro...")
             self._draw_overlay_bottom(frame, "Q: salir")
 
             if len(faces) == 0:
-                # sin rostro
-                cv2.rectangle(
-                    frame,
-                    (5,5),
-                    (frame_w-5, frame_h-5),
-                    (0,0,200), 2
-                )
+                cv2.rectangle(frame, (5,5), (frame_w-5, frame_h-5), (0,0,200), 2)
             else:
                 for (x, y, w, h) in faces:
                     rostro = gray[y:y+h, x:x+w]
 
                     try:
+                        # LBPH devuelve: label (quién es) y confidence (distancia/diferencia)
                         label, confidence = self.recognizer.predict(rostro)
+                        
+                        # --- DEBUG EN CONSOLA ---
+                        # Esto te ayudará a saber qué valor poner en THRESHOLD
+                        nombre_temp = self.label_dict.get(label, "Unknown")
+                        print(f"Detectado: {nombre_temp} | Diferencia: {int(confidence)}") 
+                        # ------------------------
+
                     except:
                         label, confidence = -1, 999
 
-                    # decidir color/texto
+                    # --- LÓGICA DE DECISIÓN ---
+                    # Si la diferencia es MENOR al límite, es la persona.
                     if confidence < THRESHOLD:
                         nombre = self.label_dict.get(label, "Desconocido")
-                        color = (0, 200, 0)
-                        text = f"{nombre} ({int(confidence)})"
+                        color = (0, 255, 0) # Verde
+                        text_top = f"Hola, {nombre}"
                     else:
                         nombre = "Desconocido"
-                        color = (0, 0, 200)
-                        text = "Desconocido"
+                        color = (0, 0, 255) # Rojo
+                        text_top = "No identificado"
 
-                    # control de calidad simple
-                    face_ratio = w / float(frame_w)
-                    if face_ratio >= 0.22:
-                        border_color = (0,200,0)
-                    elif face_ratio >= 0.12:
-                        border_color = (0,200,200)
-                    else:
-                        border_color = (0,0,200)
-
-                    cv2.rectangle(frame, (x, y), (x+w, y+h), border_color, 2)
-                    cv2.putText(frame, text, (x, y-10),
+                    # Dibujar rectángulo y texto
+                    cv2.rectangle(frame, (x, y), (x+w, y+h), color, 2)
+                    
+                    # Texto del nombre sobre la cabeza
+                    cv2.putText(frame, nombre, (x, y-10),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
 
-                    self._draw_overlay_top(
-                        frame,
-                        "Identificado" if nombre != "Desconocido" else "No identificado"
-                    )
-
-                    if confidence < THRESHOLD:
-                        cv2.putText(frame, f"Confianza: {int(confidence)}",
-                                    (10, frame_h-60),
-                                    cv2.FONT_HERSHEY_SIMPLEX,
-                                    0.7, (200,200,200), 2)
+                    # Info extra abajo
+                    self._draw_overlay_bottom(frame, f"Dif: {int(confidence)} (Limite: {THRESHOLD})")
+                    self._draw_overlay_top(frame, text_top)
 
             cv2.imshow("Reconocimiento Facial", frame)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
+            
+            # Salir con Q o ESC
+            k = cv2.waitKey(1) & 0xFF
+            if k == ord("q") or k == 27:
                 break
 
         cap.release()
         cv2.destroyAllWindows()
-
 
 if __name__ == "__main__":
     Recognizer().start()
