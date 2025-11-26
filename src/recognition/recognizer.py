@@ -19,7 +19,7 @@ def resource_path(relative_path):
 
 
 class Recognizer:
-    def _init_(self):
+    def __init__(self):
         # RUTAS CAMBIADAS PARA FUNCIONAR EN EXE
         self.model_path = resource_path("src/data/model.xml")
         self.labels_path = resource_path("src/data/labels.pickle")
@@ -147,5 +147,5 @@ class Recognizer:
         cv2.destroyAllWindows()
 
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     Recognizer().start()

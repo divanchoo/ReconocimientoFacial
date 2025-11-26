@@ -1,4 +1,5 @@
-# -- mode: python --
+
+# -*- mode: python -*-
 
 import os
 import tkinter
